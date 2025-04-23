@@ -1,0 +1,14 @@
+// Version: Latest (Resupplied Placeholder @ ~10:14 PM CEST)
+// --- PredictionLayer.Interfaces/IOptiScopeRenderer.cs ---
+namespace PredictionLayer.Interfaces
+{
+    using PredictionLayer.Models;
+    using PredictionLayer.Config; // Assuming OptiScopeConfig is here
+    // Placeholder: Interface for rendering prediction/mood telemetry visually (like the ASCII example).
+    public interface IOptiScopeRenderer
+    {
+        string RenderScope(PredictionPacket latestPacket, UIMoodState currentMood, OptiScopeConfig config);
+        // Potentially methods to render based on different inputs or history
+    }
+}
+// --- End of IOptiScopeRenderer.cs Placeholder ---

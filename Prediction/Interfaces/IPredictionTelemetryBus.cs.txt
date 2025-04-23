@@ -1,0 +1,14 @@
+// Version: Latest (Resupplied Placeholder @ ~10:14 PM CEST)
+// --- PredictionLayer.Interfaces/IPredictionTelemetryBus.cs ---
+namespace PredictionLayer.Interfaces
+{
+    using PredictionLayer.Models;
+    // Placeholder: Interface for the telemetry bus.
+    public interface IPredictionTelemetryBus
+    {
+        Task PublishSignalAsync(UserInteractionSignal signal);
+        Task PublishPredictionAsync(PredictionPacket packet);
+        // Potentially methods for subscribing or querying if needed
+    }
+}
+// --- End of IPredictionTelemetryBus.cs Placeholder ---

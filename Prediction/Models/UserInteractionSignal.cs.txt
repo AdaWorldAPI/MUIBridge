@@ -1,0 +1,20 @@
+// Version: Latest (Resupplied Placeholder @ ~10:14 PM CEST)
+// --- PredictionLayer.Models/UserInteractionSignal.cs ---
+namespace PredictionLayer.Models
+{
+    // Placeholder: Represents UserInteractionSignal DTO/class.
+    // Captures details of user actions for telemetry and prediction input.
+    public class UserInteractionSignal
+    {
+        public Guid SignalId { get; set; } = Guid.NewGuid();
+        public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
+        public string SessionId { get; set; }
+        public string UserId { get; set; }
+        public string ActionType { get; set; } // e.g., Click, KeyPress, Focus, Scroll
+        public string TargetElementId { get; set; } // ID of the UI element interacted with
+        public string TargetElementType { get; set; } // e.g., Button, TextBox, GridRow
+        public string? ContextData { get; set; } // Optional JSON payload for context
+        public double? DurationMs { get; set; } // Optional duration for actions like focus
+    }
+}
+// --- End of UserInteractionSignal.cs Placeholder ---

@@ -1,0 +1,29 @@
+// Version: Latest (Resupplied Placeholder @ ~10:14 PM CEST)
+// --- PredictionLayer.Services/PredictionTelemetryBus.cs ---
+namespace PredictionLayer.Services
+{
+    using PredictionLayer.Interfaces;
+    using PredictionLayer.Models;
+    // Placeholder: Implementation of the telemetry bus.
+    // Could use in-memory channels, Azure Service Bus, RabbitMQ etc.
+    public class PredictionTelemetryBus : IPredictionTelemetryBus
+    {
+        // Dependencies (e.g., logger, message queue client)
+        public PredictionTelemetryBus(/* dependencies */) { /* ... */ }
+
+        public async Task PublishSignalAsync(UserInteractionSignal signal)
+        {
+             Console.WriteLine($"[TelemetryBus] Signal Published: {signal.ActionType} on {signal.TargetElementId}");
+             // Actual implementation would send to a queue/log/stream
+             await Task.CompletedTask;
+        }
+
+        public async Task PublishPredictionAsync(PredictionPacket packet)
+        {
+             Console.WriteLine($"[TelemetryBus] Prediction Published: {packet.PredictedValue} (Conf: {packet.Confidence})");
+             // Actual implementation would send to a queue/log/stream
+             await Task.CompletedTask;
+        }
+    }
+}
+// --- End of PredictionTelemetryBus.cs Placeholder ---

@@ -1,0 +1,13 @@
+// Version: Latest (Resupplied Placeholder @ ~10:14 PM CEST)
+// --- PredictionLayer.Interfaces/IRubiconGate.cs ---
+namespace PredictionLayer.Interfaces
+{
+    using PredictionLayer.Models;
+    // Placeholder: Interface for the core prediction engine gate.
+    public interface IRubiconGate
+    {
+        Task<PredictionPacket> GetPredictionAsync(UserInteractionSignal contextSignal, CancellationToken cancellationToken = default);
+        // Potentially methods for model loading, configuration, etc.
+    }
+}
+// --- End of IRubiconGate.cs Placeholder ---

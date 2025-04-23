@@ -1,0 +1,20 @@
+// Version: Latest (Resupplied Placeholder @ ~10:14 PM CEST)
+// --- PredictionLayer.Models/PredictionPacket.cs ---
+namespace PredictionLayer.Models
+{
+    // Placeholder: Represents PredictionPacket DTO/class.
+    // Contains prediction results from RubiconGate.
+    public class PredictionPacket
+    {
+        public Guid PacketId { get; set; } = Guid.NewGuid();
+        public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
+        public string SourceModel { get; set; } // Identifier for the prediction model used
+        public string TargetContext { get; set; } // Where the prediction applies (e.g., next action, field value)
+        public double Confidence { get; set; } // Prediction confidence score (0.0 to 1.0)
+        public string PredictedValue { get; set; } // The predicted outcome/value
+        public Dictionary<string, double>? Alternatives { get; set; } // Optional alternative predictions and scores
+        public double MoodIntensity { get; set; } // Mood intensity derived from prediction/context (e.g., risk, urgency)
+        public string MoodLabel { get; set; } // e.g., "Neutral", "Alert", "Urgent", "Optimal"
+    }
+}
+// --- End of PredictionPacket.cs Placeholder ---

@@ -1,0 +1,37 @@
+// --- MUIBridge.Controls/MUITextBox.cs ---
+namespace MUIBridge.Controls
+{
+    // Placeholder: Represents a custom DUSK UI TextBox.
+     public class MUITextBox // : BaseUIControl
+    {
+        public string Text { get; set; }
+        public bool IsReadOnly { get; set; } = false;
+        public string BackgroundColor { get; private set; }
+        public string TextColor { get; private set; }
+        public string BorderColor { get; private set; }
+
+        public event EventHandler TextChanged;
+        public event EventHandler GotFocus;
+        public event EventHandler LostFocus;
+
+
+        public void ApplyTheme(MUIBridge.Core.ITheme theme)
+        {
+             BackgroundColor = theme.BackgroundColor; // Or a specific input background
+             TextColor = theme.TextColor;
+             BorderColor = theme.SecondaryColor; // Example
+             Console.WriteLine($"[MUITextBox] Theme '{theme.Name}' applied to textbox.");
+        }
+
+        // Methods to simulate events and generate telemetry
+         public void SimulateTextInput(string newText)
+         {
+             Text = newText;
+             TextChanged?.Invoke(this, EventArgs.Empty);
+             // Generate UserInteractionSignal
+         }
+         public void SimulateFocus() { GotFocus?.Invoke(this, EventArgs.Empty); /* Generate Signal */ }
+         public void SimulateBlur() { LostFocus?.Invoke(this, EventArgs.Empty); /* Generate Signal */ }
+    }
+}
+// --- End of MUITextBox.cs Placeholder ---

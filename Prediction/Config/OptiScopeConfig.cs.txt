@@ -1,0 +1,14 @@
+// Version: Latest (Resupplied Placeholder @ ~10:14 PM CEST)
+// --- PredictionLayer.Config/OptiScopeConfig.cs ---
+namespace PredictionLayer.Config
+{
+    // Placeholder: Configuration class for the OptiScope renderer.
+    public class OptiScopeConfig
+    {
+        public bool ShowConfidence { get; set; } = true;
+        public bool ShowMood { get; set; } = true;
+        public int HistoryLength { get; set; } = 1; // How many past predictions/moods to show
+        public string RenderMode { get; set; } = "ASCII"; // Could be "ASCII", "HTML", etc.
+    }
+}
+// --- End of OptiScopeConfig.cs Placeholder ---

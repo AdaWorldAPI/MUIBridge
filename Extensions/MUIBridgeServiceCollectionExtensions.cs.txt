@@ -1,0 +1,78 @@
+// --- MUIBridge.Extensions/MUIBridgeServiceCollectionExtensions.cs ---
+namespace MUIBridge.Extensions
+{
+    using Microsoft.Extensions.DependencyInjection; // Requires Microsoft.Extensions.DependencyInjection.Abstractions
+    using MUIBridge.Core;
+    using PredictionLayer.Interfaces; // Assuming interfaces are needed for ThemeManager coupling
+    using PredictionLayer.Services; // Assuming default implementations
+    using System.Collections.Generic; // For IEnumerable
+
+    // Placeholder: Extension methods for simplified DI registration.
+    public static class MUIBridgeServiceCollectionExtensions
+    {
+        public static IServiceCollection AddMUIBridge(this IServiceCollection services, Action<MUIBridgeOptions> configureOptions = null)
+        {
+            var options = new MUIBridgeOptions();
+            configureOptions?.Invoke(options);
+
+            // Register Themes (example with basic themes)
+            services.AddSingleton<ITheme>(new DefaultLightTheme());
+            services.AddSingleton<ITheme>(new DefaultDarkTheme());
+            // Register ThemeManager - needs all registered ITheme instances
+             services.AddSingleton<ThemeManager>(sp =>
+                new ThemeManager(
+                    sp.GetRequiredService<IEnumerable<ITheme>>(),
+                    sp.GetService<IWaveMoodAdapter>() // Optional mood adapter dependency
+            ));
+
+
+            // Register other MUIBridge core services if any...
+
+            Console.WriteLine("[MUIBridge DI] MUIBridge Core services registered.");
+            return services;
+        }
+
+         // Example registration for Prediction Layer dependencies if needed here
+         public static IServiceCollection AddPredictionLayer(this IServiceCollection services)
+         {
+             services.AddSingleton<IPredictionTelemetryBus, PredictionTelemetryBus>();
+             services.AddSingleton<IRubiconGate, RubiconGate>(); // Or scoped/transient depending on implementation
+             services.AddSingleton<IWaveMoodAdapter, WaveMoodAdapter>();
+             services.AddSingleton<IOptiScopeRenderer, AsciiOptiScopeRenderer>(); // Choose default renderer
+             // Register OptiScopeConfig, potentially from IConfiguration
+             services.AddSingleton<PredictionLayer.Config.OptiScopeConfig>(sp => new PredictionLayer.Config.OptiScopeConfig());
+
+
+             Console.WriteLine("[MUIBridge DI] Prediction Layer services registered.");
+             return services;
+         }
+    }
+
+    // Placeholder for options pattern if needed
+    public class MUIBridgeOptions { /* Configuration options for MUIBridge setup */ }
+
+    // Placeholder Theme Implementations
+    public class DefaultLightTheme : ITheme {
+        public string Name => "Light";
+        public string PrimaryColor => "#007ACC";
+        public string SecondaryColor => "#CCCCCC";
+        public string BackgroundColor => "#FFFFFF";
+        public string TextColor => "#000000";
+        public string FontFamily => "Segoe UI";
+        public int FontSize => 12;
+        public double PredictionMoodIntensity { get; /*set;*/ } // Likely read-only, set by manager? Or dynamic? Depends on design.
+         public object GetComponentStyle(string componentKey) => null; // Basic impl
+    }
+     public class DefaultDarkTheme : ITheme {
+        public string Name => "Dark";
+        public string PrimaryColor => "#0A84FF";
+        public string SecondaryColor => "#3A3A3C";
+        public string BackgroundColor => "#1C1C1E";
+        public string TextColor => "#FFFFFF";
+        public string FontFamily => "Segoe UI";
+        public int FontSize => 12;
+        public double PredictionMoodIntensity { get; /*set;*/ }
+         public object GetComponentStyle(string componentKey) => null; // Basic impl
+    }
+}
+// --- End of MUIBridgeServiceCollectionExtensions.cs Placeholder ---

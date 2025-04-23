@@ -1,0 +1,17 @@
+// --- MUIBridge.Core/ThemeChangedEventArgs.cs ---
+namespace MUIBridge.Core
+{
+    // Placeholder: Event arguments for theme changes.
+    public class ThemeChangedEventArgs : EventArgs
+    {
+        public ITheme OldTheme { get; }
+        public ITheme NewTheme { get; }
+
+        public ThemeChangedEventArgs(ITheme oldTheme, ITheme newTheme)
+        {
+            OldTheme = oldTheme;
+            NewTheme = newTheme;
+        }
+    }
+}
+// --- End of ThemeChangedEventArgs.cs Placeholder ---
