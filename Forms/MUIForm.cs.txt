@@ -1,0 +1,126 @@
+// File: MUIBridge/Forms/MUIForm.cs
+// Purpose: WinForms-compatible Form styled via ITheme and ThemeManager.
+
+using System;
+using System.Drawing;
+using System.Windows.Forms;
+using Microsoft.Extensions.Logging; // Optional
+using MUIBridge.Core; // For ITheme, ThemeManager
+
+namespace MUIBridge.Forms // Adjust namespace as needed
+{
+    /// <summary>
+    /// Base form for MUI Bridge applications, providing automatic theme application.
+    /// Inherits from System.Windows.Forms.Form for maximum compatibility.
+    /// </summary>
+    public class MUIForm : Form
+    {
+        protected readonly ThemeManager? _themeManager; // Make protected so derived forms can access if needed
+        private readonly ILogger<MUIForm>? _logger; // Optional
+
+        // Flag to prevent re-applying theme during initialization
+        private bool _isApplyingTheme = false;
+
+        // Default constructor for designer compatibility - theme applied later if possible
+        public MUIForm()
+        {
+            _logger?.LogWarning("MUIForm created without ThemeManager - theming might not be applied initially.");
+             // Consider trying to resolve ThemeManager via a static accessor or service locator if needed,
+             // but DI via derived class constructor is preferred.
+            InitializeMuiForm();
+        }
+
+        // Constructor for Dependency Injection (preferred)
+        // Derived forms should call this base constructor
+        public MUIForm(ThemeManager themeManager, ILogger<MUIForm>? logger = null)
+        {
+            _themeManager = themeManager ?? throw new ArgumentNullException(nameof(themeManager));
+            _logger = logger;
+            InitializeMuiForm();
+
+            // Initial theme application
+            ApplyTheme(_themeManager.CurrentTheme);
+
+            // Subscribe to theme changes
+            _themeManager.ThemeChanged += ThemeManager_ThemeChanged;
+             _logger?.LogDebug("MUIForm instance created and subscribed to ThemeManager.");
+        }
+
+        private void InitializeMuiForm()
+        {
+            // Enable double buffering for smoother rendering, especially if custom painting is done
+            this.DoubleBuffered = true;
+            // Optional: Set other base styles if needed
+            // this.FormBorderStyle = FormBorderStyle.Sizable; // Example
+        }
+
+
+        private void ThemeManager_ThemeChanged(object? sender, ThemeChangedEventArgs e)
+        {
+            if (_isApplyingTheme) return; // Avoid potential recursion if theme change triggers property changes
+
+            // Update appearance when theme changes
+            ApplyTheme(e.NewTheme);
+             _logger?.LogTrace("MUIForm received theme change to {ThemeName}. Applying.", e.NewTheme.Name);
+        }
+
+        /// <summary>
+        /// Applies the specified theme to the form and potentially its standard child controls.
+        /// Override this in derived forms for more specific theme application.
+        /// </summary>
+        /// <param name="theme">The theme to apply.</param>
+        protected virtual void ApplyTheme(ITheme theme)
+        {
+            if (theme == null) return;
+            _isApplyingTheme = true;
+            try
+            {
+                 // Apply basic form properties
+                 this.BackColor = theme.BackgroundColor;
+                 this.ForeColor = theme.TextColor; // Default text color for contained controls
+
+                // Apply Font (use existing font size by default, change only family if needed)
+                // Or use theme's default font completely
+                 try {
+                     if (this.Font.Name != theme.DefaultFontName || this.Font.Size != theme.DefaultFontSize) {
+                         this.Font = new Font(theme.DefaultFontName, theme.DefaultFontSize);
+                     }
+                 } catch (Exception ex) {
+                     _logger?.LogError(ex, "Failed to apply font {FontName}/{FontSize} to MUIForm.", theme.DefaultFontName, theme.DefaultFontSize);
+                 }
+
+                 _logger?.LogTrace("Applied base theme '{ThemeName}' to MUIForm '{FormName}'.", theme.Name, this.Name);
+
+                 // Optional: Recursively apply theme to standard child controls using SMBFormDecorator
+                 // if the form contains non-MUI controls that need basic theming.
+                 // SMBFormDecorator.ApplyThemeToControls(this.Controls, theme);
+
+            }
+            catch (Exception ex)
+            {
+                 _logger?.LogError(ex, "Error applying theme '{ThemeName}' to MUIForm '{FormName}'.", theme.Name, this.Name);
+            }
+            finally
+            {
+                _isApplyingTheme = false;
+            }
+            // Force redraw of the form and its children
+            this.Invalidate(true);
+        }
+
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                // Unsubscribe from theme changes
+                if (_themeManager != null)
+                {
+                    _themeManager.ThemeChanged -= ThemeManager_ThemeChanged;
+                    _logger?.LogDebug("MUIForm instance disposed and unsubscribed from ThemeManager.");
+                }
+            }
+            base.Dispose(disposing);
+        }
+    }
+}

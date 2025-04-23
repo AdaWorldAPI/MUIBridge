@@ -1,0 +1,140 @@
+// File: MUIBridge/Controls/MUILabel.cs (Patched for Mood Reactivity - Visual Update)
+// Purpose: WinForms-compatible Label styled via ThemeManager and reacting visually to mood.
+
+using System;
+using System.Drawing;
+using System.Windows.Forms;
+using Microsoft.Extensions.Logging; // Optional
+using MUIBridge.Core; // For ITheme, ThemeManager, IMoodReactiveControl
+using MUIBridge.Utils; // For WaveFXColorBlender
+
+namespace MUIBridge.Controls // Adjust namespace as needed
+{
+    public class MUILabel : Label, IMoodReactiveControl // Implement interface
+    {
+        private readonly ThemeManager _themeManager;
+        private readonly ILogger<MUILabel>? _logger; // Optional
+
+        // Store base values for blending
+        private Font? _appliedFont;
+        private Color _baseForeColor;
+        // Store current mood-adjusted color
+        private Color _currentForeColor;
+
+
+        // Constructor for DI
+        public MUILabel(ThemeManager themeManager, ILogger<MUILabel>? logger = null)
+        {
+            _themeManager = themeManager ?? throw new ArgumentNullException(nameof(themeManager));
+            _logger = logger;
+
+            this.AutoSize = false; // Turn off AutoSize for more predictable custom rendering/theming if needed
+            this.TextAlign = ContentAlignment.MiddleLeft; // Default alignment
+            this.BackColor = Color.Transparent; // Labels usually transparent
+
+            ApplyTheme(_themeManager.CurrentTheme);
+            UpdateMoodVisuals(_themeManager.CurrentPredictionMoodIntensity, _themeManager.CurrentTheme); // Apply initial mood
+
+            _themeManager.ThemeChanged += ThemeManager_ThemeChanged;
+            _themeManager.PredictionMoodChanged += ThemeManager_PredictionMoodChanged;
+
+            _logger?.LogDebug("MUILabel instance created and subscribed to ThemeManager events.");
+        }
+
+        private void ThemeManager_ThemeChanged(object? sender, ThemeChangedEventArgs e)
+        {
+            ApplyTheme(e.NewTheme);
+            UpdateMoodVisuals(e.NewTheme.PredictionMoodIntensity, e.NewTheme); // Apply new theme's mood state (likely 0)
+             _logger?.LogTrace("MUILabel received theme change to {ThemeName}. Applying theme and mood.", e.NewTheme.Name);
+        }
+
+        private void ThemeManager_PredictionMoodChanged(object? sender, float newMoodIntensity)
+        {
+             UpdateMoodVisuals(newMoodIntensity, _themeManager.CurrentTheme);
+             _logger?.LogTrace("MUILabel received mood change: {MoodIntensity:F2}. Applying.", newMoodIntensity);
+        }
+
+        private void ApplyTheme(ITheme theme)
+        {
+            try
+            {
+                 _baseForeColor = theme.TextColor; // Store base text color
+
+                 // Set initial ForeColor (mood might modify it later)
+                 _currentForeColor = _baseForeColor;
+                 this.ForeColor = _currentForeColor;
+
+                 // Set font
+                 var newFont = new Font(theme.DefaultFontName, theme.DefaultFontSize);
+                 if (this.Font == null || !newFont.Equals(this.Font)) {
+                     _appliedFont?.Dispose();
+                     _appliedFont = newFont;
+                     this.Font = _appliedFont;
+                 } else {
+                      newFont.Dispose();
+                 }
+
+                 _logger?.LogTrace("Base theme '{ThemeName}' applied to MUILabel.", theme.Name);
+            }
+            catch (Exception ex)
+            {
+                 _logger?.LogError(ex, "Failed to apply base theme '{ThemeName}' to MUILabel.", theme.Name);
+                 this.ForeColor = SystemColors.ControlText;
+                 this.Font = SystemFonts.DefaultFont;
+            }
+            this.Invalidate(); // Redraw needed after theme change
+        }
+
+        // --- IMoodReactiveControl Implementation ---
+        public void UpdateMoodVisuals(float moodIntensity, ITheme activeTheme)
+        {
+             float clampedIntensity = Math.Clamp(moodIntensity, 0f, 1f);
+
+             // Example: Blend ForeColor towards the theme's AccentColor based on mood
+             // Try calling theme-specific method first
+             Color targetForeColor = _baseForeColor; // Default to base
+             try
+             {
+                  dynamic dynamicTheme = activeTheme;
+                  targetForeColor = dynamicTheme.GetCurrentPulseColor(); // Assumes method exists and returns a color suitable for text
+                  // Maybe blend text color towards this pulse color?
+                  targetForeColor = WaveFXColorBlender.Lerp(_baseForeColor, targetForeColor, clampedIntensity * 0.7f); // Blend 70% towards pulse color
+                  _logger?.LogTrace("MUILabel: Using GetCurrentPulseColor() from theme {ThemeName} for mood blend.", activeTheme.Name);
+             }
+             catch (Exception)
+             {
+                 // Fallback if GetCurrentPulseColor() doesn't exist or fails
+                  _logger?.LogWarning("MUILabel: GetCurrentPulseColor() not found/failed on theme {ThemeName}. Using simple accent blend.", activeTheme.Name);
+                 targetForeColor = WaveFXColorBlender.Lerp(_baseForeColor, activeTheme.AccentColor, clampedIntensity * 0.5f); // Blend 50% towards accent
+             }
+
+
+            // Only update and invalidate if color actually changes
+            if (this.ForeColor != targetForeColor)
+            {
+                 _currentForeColor = targetForeColor;
+                 this.ForeColor = _currentForeColor;
+                 // Invalidate(); // Let base ForeColor setter handle redraw if sufficient
+            }
+        }
+
+        // Override OnPaint only if very custom drawing needed (e.g., background glow)
+        // protected override void OnPaint(PaintEventArgs e) { base.OnPaint(e); }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (_themeManager != null)
+                {
+                    _themeManager.ThemeChanged -= ThemeManager_ThemeChanged;
+                    _themeManager.PredictionMoodChanged -= ThemeManager_PredictionMoodChanged;
+                    _logger?.LogDebug("MUILabel instance disposed and unsubscribed.");
+                }
+                 _appliedFont?.Dispose();
+                 _appliedFont = null;
+            }
+            base.Dispose(disposing);
+        }
+    }
+}

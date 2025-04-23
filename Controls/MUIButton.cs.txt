@@ -1,0 +1,211 @@
+// File: MUIBridge/Controls/MUIButton.cs (Patched for Mood Reactivity - Visual Update)
+// Purpose: WinForms-compatible Button styled via ThemeManager and reacting visually to mood.
+
+using System;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Windows.Forms;
+using Microsoft.Extensions.Logging; // Optional
+using MUIBridge.Core; // For ITheme, ThemeManager, IMoodReactiveControl
+using MUIBridge.Utils; // For WaveFXColorBlender
+
+namespace MUIBridge.Controls // Adjust namespace as needed
+{
+    public class MUIButton : Button, IMoodReactiveControl // Implement interface
+    {
+        private readonly ThemeManager _themeManager;
+        private readonly ILogger<MUIButton>? _logger; // Optional
+
+        // Store theme properties locally
+        private Color _baseBackColor;
+        private Color _baseForeColor;
+        private Color _baseBorderColor;
+        private Color _currentBackColor; // Actual color used for painting (includes mood effect)
+        private float _cornerRadius;
+        private float _borderThickness;
+        private Font? _appliedFont;
+        private float _currentMoodIntensity = 0f;
+
+        // Constructor for DI
+        public MUIButton(ThemeManager themeManager, ILogger<MUIButton>? logger = null)
+        {
+            _themeManager = themeManager ?? throw new ArgumentNullException(nameof(themeManager));
+            _logger = logger;
+
+            this.SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
+            this.BackColor = Color.Transparent; // Use transparency for custom drawing base
+
+            ApplyTheme(_themeManager.CurrentTheme);
+            UpdateMoodVisuals(_themeManager.CurrentPredictionMoodIntensity, _themeManager.CurrentTheme); // Apply initial mood
+
+            _themeManager.ThemeChanged += ThemeManager_ThemeChanged;
+            _themeManager.PredictionMoodChanged += ThemeManager_PredictionMoodChanged;
+
+            _logger?.LogDebug("MUIButton instance created and subscribed to ThemeManager events.");
+        }
+
+        private void ThemeManager_ThemeChanged(object? sender, ThemeChangedEventArgs e)
+        {
+            ApplyTheme(e.NewTheme);
+            // Apply current mood intensity of the new theme (which was reset to 0)
+            UpdateMoodVisuals(e.NewTheme.PredictionMoodIntensity, e.NewTheme);
+             _logger?.LogTrace("MUIButton received theme change to {ThemeName}. Applying theme and mood.", e.NewTheme.Name);
+        }
+
+        private void ThemeManager_PredictionMoodChanged(object? sender, float newMoodIntensity)
+        {
+             UpdateMoodVisuals(newMoodIntensity, _themeManager.CurrentTheme);
+             _logger?.LogTrace("MUIButton received mood change: {MoodIntensity:F2}. Applying.", newMoodIntensity);
+        }
+
+        private void ApplyTheme(ITheme theme)
+        {
+            // Update base fields used in painting logic
+             _baseBackColor = theme.PrimaryColor; // Or a specific ButtonBackColor from theme
+             _baseForeColor = theme.TextColor;
+             _baseBorderColor = theme.BorderColor;
+            _cornerRadius = theme.CornerRadius;
+            _borderThickness = theme.BorderThickness;
+
+            // Apply Font
+            try {
+                 var newFont = new Font(theme.DefaultFontName, theme.DefaultFontSize);
+                 if (this.Font == null || !newFont.Equals(this.Font)) {
+                     _appliedFont?.Dispose();
+                     _appliedFont = newFont;
+                     this.Font = _appliedFont; // Set base property
+                 } else {
+                     newFont.Dispose(); // Dispose if not used
+                 }
+            } catch (Exception ex) {
+                 _logger?.LogError(ex, "Failed to apply font {FontName}/{FontSize}. Using default.", theme.DefaultFontName, theme.DefaultFontSize);
+                 if (_appliedFont == null && this.Font != null) _appliedFont = (Font)this.Font.Clone(); // Keep existing if first apply fails
+            }
+
+             _logger?.LogTrace("Base theme '{ThemeName}' applied to MUIButton.", theme.Name);
+             // Mood visuals are applied separately in UpdateMoodVisuals -> OnPaint
+        }
+
+        // --- IMoodReactiveControl Implementation ---
+        public void UpdateMoodVisuals(float moodIntensity, ITheme activeTheme)
+        {
+            _currentMoodIntensity = Math.Clamp(moodIntensity, 0f, 1f);
+
+            // Calculate the actual background color based on mood by calling the theme's method
+            // This assumes the theme implements a method like GetCurrentPulseColor()
+            // If not, fallback to simple blending here.
+            Color pulseColor = _baseBackColor; // Default to base
+            try
+            {
+                 // Attempt to dynamically call the method if implemented by the theme
+                 // A more robust way might involve specific theme interfaces or reflection with caching.
+                 dynamic dynamicTheme = activeTheme;
+                 pulseColor = dynamicTheme.GetCurrentPulseColor(); // Assumes method exists
+                 _logger?.LogTrace("MUIButton: Using GetCurrentPulseColor() from theme {ThemeName}, result: {Color}", activeTheme.Name, pulseColor);
+            }
+            catch (Exception ex)
+            {
+                // Fallback if GetCurrentPulseColor() doesn't exist or fails
+                _logger?.LogWarning("MUIButton: GetCurrentPulseColor() not found or failed on theme {ThemeName}. Falling back to simple blend. Error: {Error}", activeTheme.Name, ex.Message);
+                pulseColor = WaveFXColorBlender.Lerp(_baseBackColor, activeTheme.AccentColor, _currentMoodIntensity * 0.6f); // Blend up to 60% towards accent
+            }
+
+            if (_currentBackColor != pulseColor)
+            {
+                 _currentBackColor = pulseColor;
+                 this.Invalidate(); // Force redraw needed to show new color
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e); // Call base first to clear or draw basic button state? Test which looks better.
+
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            // Clear with transparency may not be needed if inheriting from Button and calling base.OnPaint.
+            // If NOT calling base.OnPaint and using UserPaint, clearing is essential:
+            // e.Graphics.Clear(this.Parent?.BackColor ?? SystemColors.Control);
+
+             RectangleF borderRect = new RectangleF(
+                 _borderThickness / 2,
+                 _borderThickness / 2,
+                 this.ClientSize.Width - _borderThickness,
+                 this.ClientSize.Height - _borderThickness);
+             // Prevent drawing outside bounds
+             borderRect.Width = Math.Max(0, borderRect.Width);
+             borderRect.Height = Math.Max(0, borderRect.Height);
+
+
+            // --- Draw Background and Border ---
+            using (var path = GetRoundedRectPath(borderRect, _cornerRadius))
+            {
+                // Background Fill - Use the mood-calculated color
+                using (var brush = new SolidBrush(_currentBackColor))
+                {
+                    e.Graphics.FillPath(brush, path);
+                }
+
+                // Border - Use base border color
+                if (_borderThickness > 0 && borderRect.Width > 0 && borderRect.Height > 0)
+                {
+                    using (var pen = new Pen(_baseBorderColor, _borderThickness))
+                    {
+                        // Adjust pen alignment if necessary
+                        pen.Alignment = PenAlignment.Center;
+                         e.Graphics.DrawPath(pen, path);
+                    }
+                }
+            }
+
+             // --- Draw Text ---
+             // Use the Font property set during ApplyTheme
+             Font drawFont = this.Font ?? SystemFonts.DefaultFont;
+             TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak | TextFormatFlags.NoPadding;
+             TextRenderer.DrawText(e.Graphics, this.Text, drawFont, this.ClientRectangle, _baseForeColor, flags);
+
+            // --- Draw Focus Rectangle ---
+            if (this.Focused && this.ShowFocusCues)
+            {
+                 Rectangle focusRect = this.ClientRectangle;
+                 focusRect.Inflate(-2, -2); // Small inset
+                 ControlPaint.DrawFocusRectangle(e.Graphics, focusRect);
+            }
+        }
+
+        // Helper method to create a rounded rectangle path (same as before)
+        private GraphicsPath GetRoundedRectPath(RectangleF rect, float radius)
+        {
+            GraphicsPath path = new GraphicsPath();
+            if (radius <= 0 || rect.Width <= 0 || rect.Height <= 0) { path.AddRectangle(rect); return path; }
+            float diameter = radius * 2;
+            // Clamp diameter to smallest dimension
+            if (diameter > rect.Width) diameter = rect.Width;
+            if (diameter > rect.Height) diameter = rect.Height;
+            RectangleF arcRect = new RectangleF(rect.Location, new SizeF(diameter, diameter));
+            path.AddArc(arcRect, 180, 90); // Top-left
+            arcRect.X = rect.Right - diameter; path.AddArc(arcRect, 270, 90); // Top-right
+            arcRect.Y = rect.Bottom - diameter; path.AddArc(arcRect, 0, 90); // Bottom-right
+            arcRect.X = rect.Left; path.AddArc(arcRect, 90, 90); // Bottom-left
+            path.CloseFigure();
+            return path;
+        }
+
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (_themeManager != null)
+                {
+                    _themeManager.ThemeChanged -= ThemeManager_ThemeChanged;
+                    _themeManager.PredictionMoodChanged -= ThemeManager_PredictionMoodChanged;
+                    _logger?.LogDebug("MUIButton instance disposed and unsubscribed.");
+                }
+                 _appliedFont?.Dispose();
+                 _appliedFont = null;
+            }
+            base.Dispose(disposing);
+        }
+    }
+}
