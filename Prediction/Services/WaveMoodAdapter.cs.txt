@@ -1,0 +1,143 @@
+// File: Prediction/Services/WaveMoodAdapter.cs
+// Purpose: Subscribes to prediction telemetry and updates ThemeManager's mood intensity.
+
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using MUIBridge.Core; // For ThemeManager (patched version)
+using PredictionLayer.Interfaces;
+using PredictionLayer.Models;
+using PredictionLayer.Services; // Needed to reference PredictionTelemetryBus implementation type for event check
+
+namespace PredictionLayer.Services // Adjust namespace as needed
+{
+    /// <summary>
+    /// Adapts prediction confidence scores from the telemetry bus into
+    /// mood intensity updates for the ThemeManager.
+    /// Typically registered as a Singleton or HostedService in DI.
+    /// </summary>
+    public class WaveMoodAdapter : IWaveMoodAdapter // Optional: Implement interface
+    {
+        private readonly IPredictionTelemetryBus _telemetryBus;
+        private readonly ThemeManager _themeManager; // Inject concrete ThemeManager (patched version)
+        private readonly ILogger<WaveMoodAdapter> _logger;
+
+        // Optional state for smoothing/thresholding
+        private float _lastAppliedMoodIntensity = -1f; // Initialize to value outside 0-1 range
+        private readonly float _minDeltaThreshold = 0.01f; // Configurable: Only update if change > 1%
+
+        // Store reference to event handler for unsubscription
+        private Func<PredictionPacket, Task>? _busEventHandler;
+
+        public WaveMoodAdapter(
+            IPredictionTelemetryBus telemetryBus,
+            ThemeManager themeManager,
+            ILogger<WaveMoodAdapter> logger)
+        {
+            _telemetryBus = telemetryBus ?? throw new ArgumentNullException(nameof(telemetryBus));
+            _themeManager = themeManager ?? throw new ArgumentNullException(nameof(themeManager));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _logger.LogInformation("WaveMoodAdapter initialized.");
+        }
+
+        /// <summary>
+        /// Starts listening to the prediction telemetry bus.
+        /// </summary>
+        public Task StartAsync(CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation("Starting WaveMoodAdapter and subscribing to PredictionTelemetryBus...");
+
+            _busEventHandler = this.HandlePredictionPacketAsync;
+
+            // Check if the injected bus is the specific event-based implementation
+            if (_telemetryBus is PredictionTelemetryBus eventBus)
+            {
+                eventBus.PredictionReceivedAsync += _busEventHandler;
+                _logger.LogInformation("Successfully subscribed WaveMoodAdapter to PredictionTelemetryBus.");
+            }
+            else
+            {
+                _logger.LogWarning("WaveMoodAdapter could not subscribe to PredictionTelemetryBus (expected event pattern not detected on provided instance). Mood updates will not occur.");
+                // Handle other bus subscription patterns if necessary (e.g., polling, specific interface methods)
+            }
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Stops listening to the prediction telemetry bus.
+        /// </summary>
+        public Task StopAsync(CancellationToken cancellationToken = default)
+        {
+             _logger.LogInformation("Stopping WaveMoodAdapter and unsubscribing from PredictionTelemetryBus...");
+
+             if (_telemetryBus is PredictionTelemetryBus eventBus && _busEventHandler != null)
+             {
+                 eventBus.PredictionReceivedAsync -= _busEventHandler;
+                 _logger.LogInformation("Successfully unsubscribed WaveMoodAdapter from PredictionTelemetryBus.");
+             }
+             _busEventHandler = null;
+
+             // Optional: Reset mood on stop?
+             // _themeManager.SetPredictionMood(0f);
+
+             return Task.CompletedTask;
+        }
+
+        private Task HandlePredictionPacketAsync(PredictionPacket packet)
+        {
+            if (packet == null) return Task.CompletedTask;
+
+            _logger.LogTrace("WaveMoodAdapter received PredictionPacket. Confidence: {Confidence:F2}, CXRef: {CXRef}", packet.Confidence, packet.CXRef);
+
+            float newMoodIntensity = packet.Confidence; // Direct mapping initially
+
+            // --- Optional: Apply Smoothing Logic ---
+            // Example: Lerp or moving average could be applied here.
+            // float smoothedIntensity = Lerp(_lastAppliedMoodIntensity < 0 ? newMoodIntensity : _lastAppliedMoodIntensity, newMoodIntensity, 0.2f); // Simple Lerp example
+            // newMoodIntensity = smoothedIntensity;
+            // _logger.LogTrace("Smoothed mood intensity: {SmoothedIntensity:F2}", newMoodIntensity);
+
+            // --- Optional: Apply Minimum Delta Threshold ---
+            if (Math.Abs(newMoodIntensity - _lastAppliedMoodIntensity) < _minDeltaThreshold && _lastAppliedMoodIntensity >= 0)
+            {
+                 _logger.LogTrace("Mood intensity change ({Delta:F3}) is below threshold ({Threshold:F3}). Skipping update.",
+                    Math.Abs(newMoodIntensity - _lastAppliedMoodIntensity), _minDeltaThreshold);
+                return Task.CompletedTask; // Change too small, skip update
+            }
+
+
+            // --- Optional: Implement Mood Decay ---
+            // Would require a separate Timer to periodically call SetPredictionMood with a decayed value
+            // if no new packets have arrived recently. Omitted for simplicity in this draft.
+            // _logger.LogDebug("Mood Decay logic not implemented.");
+
+
+            // --- Update ThemeManager ---
+            try
+            {
+                // Use the patched method to update the mood intensity on the current theme
+                _themeManager.SetPredictionMood(newMoodIntensity);
+                _lastAppliedMoodIntensity = newMoodIntensity; // Store last applied value
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error setting prediction mood in ThemeManager.");
+                // Handle exception as needed
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public void Dispose()
+        {
+            // Ensure StopAsync is called to unsubscribe
+            StopAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+             _logger.LogDebug("WaveMoodAdapter disposed.");
+            GC.SuppressFinalize(this);
+        }
+
+        // Example Lerp function if needed for smoothing
+        // private float Lerp(float start, float end, float amount) => start + (end - start) * Math.Clamp(amount, 0f, 1f);
+    }
+}

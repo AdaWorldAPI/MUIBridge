@@ -1,0 +1,25 @@
+// File: Prediction/Interfaces/IWaveMoodAdapter.cs (Optional Interface)
+// Purpose: Defines the contract for the service adapting prediction mood to the theme.
+
+using System.Threading.Tasks;
+using System.Threading;
+
+namespace PredictionLayer.Interfaces // Adjust namespace as needed
+{
+    /// <summary>
+    /// Optional interface for the WaveMoodAdapter service.
+    /// Primarily useful for defining Start/Stop lifecycle if needed as a hosted service.
+    /// </summary>
+    public interface IWaveMoodAdapter : System.IDisposable
+    {
+        /// <summary>
+        /// Starts the adapter (subscribes to the telemetry bus).
+        /// </summary>
+        Task StartAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Stops the adapter (unsubscribes from the telemetry bus).
+        /// </summary>
+        Task StopAsync(CancellationToken cancellationToken = default);
+    }
+}

@@ -1,0 +1,165 @@
+// File: MUIBridge/Core/ThemeManager.cs (Patched for Mood Awareness)
+// Purpose: Manages available themes, the active theme, and prediction mood state.
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.Extensions.Logging; // Optional logging
+
+namespace MUIBridge.Core // Adjust namespace as needed
+{
+    public class ThemeManager
+    {
+        private readonly IReadOnlyDictionary<string, ITheme> _availableThemes;
+        private readonly ILogger<ThemeManager>? _logger;
+        private ITheme _currentTheme;
+        // Mood state is now held within the ITheme instance via PredictionMoodIntensity property
+
+        public event EventHandler<ThemeChangedEventArgs>? ThemeChanged;
+        public event EventHandler<float>? PredictionMoodChanged; // Event to notify subscribers of mood changes
+
+        /// <summary>
+        /// Gets the currently active theme instance.
+        /// </summary>
+        public ITheme CurrentTheme => _currentTheme;
+
+        /// <summary>
+        /// Gets a collection of available theme names.
+        /// </summary>
+        public IEnumerable<string> AvailableThemeNames => _availableThemes.Keys;
+
+        /// <summary>
+        /// Gets the current prediction mood intensity (0.0 to 1.0) from the active theme.
+        /// </summary>
+        public float CurrentPredictionMoodIntensity => _currentTheme.PredictionMoodIntensity;
+
+
+        public ThemeManager(IEnumerable<ITheme> themes, string defaultThemeName, ILogger<ThemeManager>? logger = null)
+        {
+            _logger = logger;
+            if (themes == null) throw new ArgumentNullException(nameof(themes));
+
+            try
+            {
+                // Use ToDictionary to detect duplicate names early
+                _availableThemes = themes.ToDictionary(t => t.Name, t => t, StringComparer.OrdinalIgnoreCase);
+                 _logger?.LogDebug("Registered {ThemeCount} themes: {ThemeNames}", _availableThemes.Count, string.Join(", ", _availableThemes.Keys));
+            }
+            catch (ArgumentException ex)
+            {
+                 _logger?.LogError(ex, "Failed to initialize ThemeManager due to duplicate theme names.");
+                 throw new ArgumentException("Duplicate theme names detected.", nameof(themes), ex);
+            }
+
+            if (_availableThemes.Count == 0)
+            {
+                 _logger?.LogError("No themes were provided to the ThemeManager.");
+                 throw new ArgumentException("At least one theme must be provided.", nameof(themes));
+            }
+
+            if (string.IsNullOrWhiteSpace(defaultThemeName) || !_availableThemes.TryGetValue(defaultThemeName, out _currentTheme!))
+            {
+                _currentTheme = _availableThemes.First().Value; // Fallback to the first registered theme
+                 _logger?.LogWarning("Default theme '{DefaultThemeName}' not found or not specified. Falling back to '{FallbackThemeName}'.", defaultThemeName, _currentTheme.Name);
+            }
+            else
+            {
+                 _logger?.LogInformation("ThemeManager initialized. Default theme set to '{DefaultThemeName}'.", _currentTheme.Name);
+            }
+             // Initialize mood on the selected theme
+             _currentTheme.PredictionMoodIntensity = 0f;
+        }
+
+        /// <summary>
+        /// Sets the active theme by name. Resets PredictionMoodIntensity on the new theme.
+        /// </summary>
+        /// <param name="themeName">The name of the theme to activate.</param>
+        /// <returns>True if the theme was found and set, false otherwise.</returns>
+        public bool SetTheme(string themeName)
+        {
+            if (string.IsNullOrWhiteSpace(themeName))
+            {
+                 _logger?.LogWarning("SetTheme called with null or empty theme name.");
+                 return false;
+            }
+
+            if (_availableThemes.TryGetValue(themeName, out ITheme? newTheme))
+            {
+                if (newTheme.Name.Equals(_currentTheme.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger?.LogDebug("Theme '{ThemeName}' is already active.", themeName);
+                    return true; // Already the current theme
+                }
+
+                ITheme previousTheme = _currentTheme;
+                _currentTheme = newTheme;
+                // Reset mood intensity when theme changes - adapter will update it based on current prediction
+                 _currentTheme.PredictionMoodIntensity = 0f;
+                _logger?.LogInformation("Active theme changed from '{PreviousTheme}' to '{NewTheme}'. Mood reset.", previousTheme.Name, _currentTheme.Name);
+                OnThemeChanged(new ThemeChangedEventArgs(previousTheme, _currentTheme));
+                // Also fire mood change event as intensity might implicitly change to 0
+                 OnPredictionMoodChanged(_currentTheme.PredictionMoodIntensity);
+                return true;
+            }
+            else
+            {
+                _logger?.LogWarning("Theme '{ThemeName}' not found in available themes.", themeName);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Sets the prediction mood intensity on the currently active theme.
+        /// Clamps the value between 0.0 and 1.0.
+        /// Raises the PredictionMoodChanged event if the value changes.
+        /// </summary>
+        /// <param name="moodIntensity">The mood intensity value (0.0 to 1.0).</param>
+        public void SetPredictionMood(float moodIntensity)
+        {
+            float clampedIntensity = Math.Clamp(moodIntensity, 0f, 1f);
+            // Check against the property on the theme object itself
+            if (_currentTheme.PredictionMoodIntensity != clampedIntensity)
+            {
+                _logger?.LogTrace("Setting prediction mood intensity on theme '{ThemeName}' to {Mood:F2}", CurrentTheme.Name, clampedIntensity);
+                _currentTheme.PredictionMoodIntensity = clampedIntensity; // Update the theme instance
+                OnPredictionMoodChanged(clampedIntensity); // Notify subscribers
+            }
+        }
+
+
+        /// <summary>
+        /// Gets a theme instance by its name.
+        /// </summary>
+        /// <param name="themeName">The name of the theme.</param>
+        /// <returns>The ITheme instance or null if not found.</returns>
+        public ITheme? GetThemeByName(string themeName)
+        {
+            _availableThemes.TryGetValue(themeName, out ITheme? theme);
+            return theme;
+        }
+
+        // Protected virtual methods to raise events
+        protected virtual void OnThemeChanged(ThemeChangedEventArgs e)
+        {
+            ThemeChanged?.Invoke(this, e);
+        }
+
+        protected virtual void OnPredictionMoodChanged(float newMoodIntensity)
+        {
+             PredictionMoodChanged?.Invoke(this, newMoodIntensity);
+        }
+    }
+
+    // ThemeChangedEventArgs remains the same as before
+    public class ThemeChangedEventArgs : EventArgs
+    {
+        public ITheme PreviousTheme { get; }
+        public ITheme NewTheme { get; }
+
+        public ThemeChangedEventArgs(ITheme previousTheme, ITheme newTheme)
+        {
+            PreviousTheme = previousTheme;
+            NewTheme = newTheme;
+        }
+    }
+}
