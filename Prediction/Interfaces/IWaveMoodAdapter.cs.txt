@@ -5,21 +5,41 @@ using System.Threading.Tasks;
 using System.Threading;
 
 namespace PredictionLayer.Interfaces // Adjust namespace as needed
+// Version: Latest (Resupplied Placeholder @ ~10:14 PM CEST)
+// --- PredictionLayer.Interfaces/IWaveMoodAdapter.cs ---
+namespace PredictionLayer.Interfaces
 {
     /// <summary>
     /// Optional interface for the WaveMoodAdapter service.
     /// Primarily useful for defining Start/Stop lifecycle if needed as a hosted service.
     /// </summary>
     public interface IWaveMoodAdapter : System.IDisposable
+    using PredictionLayer.Models;
+    // Placeholder: Interface for translating prediction packets/signals into UI mood states.
+    public interface IWaveMoodAdapter
     {
         /// <summary>
         /// Starts the adapter (subscribes to the telemetry bus).
         /// </summary>
         Task StartAsync(CancellationToken cancellationToken = default);
+        Task<UIMoodState> GetCurrentMoodAsync(string uiContextId); // UIMoodState would be another DTO/class
+        Task UpdateMoodFromPredictionAsync(PredictionPacket packet);
+        Task UpdateMoodFromSignalAsync(UserInteractionSignal signal);
+        event EventHandler<UIMoodState> MoodChanged; // Event for UI updates
+    }
 
         /// <summary>
         /// Stops the adapter (unsubscribes from the telemetry bus).
         /// </summary>
         Task StopAsync(CancellationToken cancellationToken = default);
+    // Placeholder for related DTO/class
+    public class UIMoodState
+    {
+        public string ContextId { get; set; }
+        public double Intensity { get; set; } // Combined intensity score
+        public string Label { get; set; } // Overall mood label for context
+        public Dictionary<string, double> ComponentIntensities { get; set; } // Mood per UI component/area
     }
 }
+}
+// --- End of IWaveMoodAdapter.cs Placeholder ---
